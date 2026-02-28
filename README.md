@@ -1,0 +1,1 @@
+Romoves illigal character from a file name and replace it with a blank space so that the "Impossible to compress [file path]... has got character that are not allowed to use in compressed files. It's recommended to rename the file or the directory." doesn't pop up
