@@ -15,15 +15,15 @@ It supports both:
 ## How It Works (Step by Step)
 1. It takes either file path input(s) or a folder input.
 2. If folder mode is used, it scans only files directly inside that folder.
-3. If subfolders are found, it warns: `subfolder and the content inside it cannot be renamed`.
+3. If subfolders are found, it warns: `subfolder and the content inside the cannot be renamed`.
 4. For each file, it keeps only the **last extension** unchanged (example: for `name.pdf.txt`, `.txt` is treated as extension).
 5. It checks the filename part character by character.
 6. Only `A-Z`, `a-z`, and `0-9` are considered valid.
 7. Any other character is replaced with a blank space (` `).
 8. Leading and trailing spaces are trimmed.
-9. If the cleaned name conflicts with an existing filename, an auto-suffix is added: `name(1).ext`, `name(2).ext`, etc.
+9. If cleaned name conflicts with an existing filename, auto-suffix is added: `name(1).ext`, `name(2).ext`, etc.
 10. If a filename has no valid characters at all, manual rename mode is offered (`y/n`).
-11. In manual mode, the new name is strictly validated. Invalid characters are shown, and the user is prompted again.
+11. In manual mode, the new name is strictly validated. Invalid characters are shown and user is prompted again.
 
 ## How To Run
 Open terminal in project folder:
@@ -39,7 +39,7 @@ python Illigal_character_remover.py --folder "path\to\test_files"
 
 ### Rename selected file(s)
 ```powershell
-python Illigal_character_remover.py "path\to\test_files\ab@12!.txt" "path\to\test_files\##report 2026?.pdf.txt"
+python Illigal_character_remover.py "path\to\test_files\file1.txt" "path\to\test_files\file2.pdf.txt"
 ```
 
 ### Interactive mode (no arguments)
