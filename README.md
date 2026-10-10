@@ -1,81 +1,163 @@
 # Illegal Character Remover
 
-Illegal Character Remover is a Windows desktop app for cleaning file and
-folder names before sharing or compressing them. It replaces characters other
-than ASCII letters and digits with spaces, trims the ends, preserves a file's
-last extension, collects names that need manual attention, and supports undo.
-The selected root folder is never renamed.
+A Windows desktop app that renames files and folders to remove characters
+that can cause problems when compressing them. Characters outside
+`A-Z`, `a-z`, and `0-9` are replaced with spaces. It is built for cleaning
+downloaded media and datasets before zipping them.
 
-## Windows setup
+> **[Download for Windows — latest NSIS installer](https://github.com/SanjidArefin/Illegal_character_remover/releases/latest)**
 
-Install these prerequisites before building:
+![File Renamer desktop app showing its folder selection and results panels.](docs/images/file-renamer-main.png)
 
-- Node.js LTS and pnpm.
-- Rust with the MSVC toolchain.
-- Microsoft C++ Build Tools with **Desktop development with C++** selected.
-- Microsoft Edge WebView2 Runtime. It is already present on Windows 10 version
-  1803 and later and Windows 11 on most systems.
-- Python 3.11 or newer, in a virtual environment, plus PyInstaller to build the
-  sidecar executable.
+- **GUI:** Tauri v2 with vanilla HTML, CSS, and JavaScript
+- **Backend:** Python sidecar bundled as a single `.exe` with PyInstaller
+- **Installer:** NSIS `.exe`, distributed through GitHub Releases
 
-Tauri's official [Windows prerequisites](https://v2.tauri.app/start/prerequisites/)
-cover the C++ Build Tools, WebView2, and Rust setup.
+## What It Does
 
-From PowerShell, install the project dependencies and build the Python sidecar:
+- Replaces every non-alphanumeric character in a filename or folder name with
+  a space, then trims leading and trailing spaces.
+- Preserves a file's last extension.
+- Adds `(1)`, `(2)`, and so on when a cleaned name conflicts with an existing
+  name.
+- Flags names that become empty after cleaning for manual rename.
+- Keeps an undo log so renames can be reversed.
+- Never renames the selected root folder.
+- Processes recursive operations deepest-first so parent renames do not
+  invalidate child paths.
 
-```powershell
-cd D:\path\to\Illegal_character_remover
-pnpm install
-python -m venv .venv
-.\.venv\Scripts\python -m pip install pyinstaller
-.\.venv\Scripts\python backend\build.py
+### Modes
+
+The GUI uses **Target** and **Scope** controls:
+
+| Target | Scope off | Scope on |
+| --- | --- | --- |
+| Files | `files_non_recursive` | `files_recursive` |
+| Folders | Always recursive | `folders_recursive` |
+| Files + Folders | `files_and_folders_non_recursive` | `files_and_folders_recursive` |
+
+- **Scope off** processes only the selected folder's direct children.
+- **Scope on** processes everything below it, recursively.
+- Folders are always processed recursively. Choosing **Folders** checks and
+  disables the scope toggle.
+
+## Project Layout
+
+```text
+Illegal_character_remover/
+├── backend/                      # Python sidecar
+│   ├── __init__.py
+│   ├── main.py                   # JSON-lines stdin/stdout entry point
+│   ├── rename_logic.py           # Scan, rename, and undo logic
+│   └── build.py                  # PyInstaller wrapper
+├── src/                          # Vanilla frontend
+│   ├── index.html
+│   ├── styles.css
+│   ├── main.js                   # UI and sidecar protocol client
+│   └── manual-validation.js      # Manual rename validation
+├── src-tauri/                    # Tauri v2 shell
+│   ├── src/
+│   │   ├── lib.rs
+│   │   └── main.rs
+│   ├── capabilities/default.json
+│   ├── binaries/                 # Target-named sidecar executable
+│   ├── Cargo.toml
+│   └── tauri.conf.json
+├── package.json
+├── pnpm-lock.yaml
+├── vite.config.js
+└── README.md
 ```
 
-`backend/build.py` writes the target-named executable under
-`src-tauri\binaries\`, matching the `bundle.externalBin` entry. On a standard
-x64 MSVC setup, the filename is
-`illegal-char-remover-x86_64-pc-windows-msvc.exe`. The script uses the active
-Rust host triple when naming the output. PyInstaller's one-file packaging mode
-is documented in its [usage guide](https://pyinstaller.org/en/stable/usage.html).
+## Building From Source
 
-Run the desktop app in development or build an installer:
+### Prerequisites
+
+- Node.js LTS and pnpm
+- Rust with the MSVC toolchain
+- Microsoft C++ Build Tools with **Desktop development with C++**
+- Microsoft Edge WebView2 Runtime (normally included on Windows 10 version
+  1803 and later, and Windows 11)
+- Python 3.11 or later with PyInstaller
+
+See Tauri's [Windows prerequisites](https://v2.tauri.app/start/prerequisites/)
+for the C++ Build Tools, WebView2, and Rust setup.
+
+### Build
+
+From PowerShell in the project directory:
 
 ```powershell
+pnpm install
+
+# Build the Python sidecar into src-tauri/binaries/
+python backend/build.py
+
+# Run the desktop app in development
 pnpm tauri dev
+
+# Build a production installer
 pnpm tauri build
 ```
 
-The installer is produced under `src-tauri\target\release\bundle\`. Build
-the sidecar first; without it, the app shows a recoverable Python-sidecar
-startup error and offers a restart action.
+`backend/build.py` uses the current Rust host triple in the sidecar filename,
+for example `illegal-char-remover-x86_64-pc-windows-msvc.exe`. This matches
+the `bundle.externalBin` setting in `src-tauri/tauri.conf.json`. Build the
+sidecar before building or running the desktop app.
 
-## GUI usage
+The NSIS installer is created under:
 
-1. Choose **Choose folder** to select a directory, or **Choose files** to pick
-   one or more specific files.
-2. For a folder, select one of four modes:
-   - **Files only · this folder** — direct files only.
-   - **Files only · all subfolders** — files anywhere below the root.
-   - **Folders only · all subfolders** — descendant folders only.
-   - **Files + folders · all subfolders** — both kinds of descendants.
-3. Select **Scan and rename**. The root folder remains unchanged, and recursive
-   modes process deeper paths before their parents.
-4. Review the renamed count, collected errors, and items needing manual names.
+```text
+src-tauri/target/release/bundle/nsis/
+```
+
+The current version is `0.1.1`. Before a new release build, update the version
+in `package.json`, `src-tauri/tauri.conf.json`, and `src-tauri/Cargo.toml`.
+Windows treats installs with the same app identifier as upgrades, so an
+existing version does not need to be uninstalled first.
+
+## Using the App
+
+1. Click **Select folder**. The selected folder itself is never renamed.
+2. Choose a **Target** and **Scope**.
+3. Click **Scan and rename**. The progress bar shows live scan counts and
+   rename progress.
+4. Review the results: renamed count, errors, and items needing manual names.
    **Review manual names** opens a one-at-a-time dialog. Names may contain only
-   `A-Z`, `a-z`, `0-9`, and spaces. File extensions are kept. Existing-name and
-   same-session duplicate conflicts are rejected.
-5. Choose **Undo** to reverse the current app session's batch without a prompt.
-   The app stores undo entries in `%APPDATA%\illegal-char-remover\undo.jsonl`.
-   When it finds entries from an earlier app session, it asks before undoing
-   them. Dismissing the prompt leaves the entries available through **Review
-   recovered undo**; starting a new rename batch drops that old recovery
-   history. Successful undo clears the completed log entries, while failures
-   remain available to retry.
+   `A-Z`, `a-z`, `0-9`, and spaces. File extensions are preserved. Duplicate
+   names, including names already used in the same session, are rejected.
+5. Click **Undo** to reverse the current session's renames immediately.
+   Entries are persisted in `%APPDATA%\illegal-char-remover\undo.jsonl`.
+   If the app finds entries from a previous session, it asks before undoing
+   them. Dismissing the prompt leaves them available through **Review recovered
+   undo**. Starting a new rename batch drops previous-session recovery history.
 
-The **Theme** selector defaults to **System** and also offers **Light** and
-**Dark**. The app processes paths locally on the device.
+The **Theme** selector offers **Light**, **Dark**, and **System**; **System** is
+the default. Renaming is performed locally on the device.
 
-## Tests and frontend build
+## Troubleshooting
+
+### Python sidecar stopped or could not start
+
+1. Click **Restart** in the app to start the Python sidecar again.
+2. If it stops again, close and reopen the app. If the problem persists, get
+   the latest installer from [GitHub Releases](https://github.com/SanjidArefin/Illegal_character_remover/releases/latest)
+   and reinstall it.
+3. When running from source, rebuild the sidecar before starting or packaging
+   the app:
+
+   ```powershell
+   python backend/build.py
+   pnpm tauri dev
+   # Or create a production installer:
+   pnpm tauri build
+   ```
+
+The sidecar executable must be present in `src-tauri/binaries/` with the name
+matching your Rust target triple. `backend/build.py` creates the correctly
+named executable for the current machine.
+
+## Tests
 
 ```powershell
 python -m unittest discover -s tests -p 'test_*.py'
@@ -83,15 +165,14 @@ pnpm test:frontend
 pnpm build
 ```
 
-The Python suite creates and removes its synthetic test trees inside the project
-folder. It covers all four modes with more than 1,800 files, manual-name
-conflicts, explicit file selections, and mixed-batch undo.
+The backend tests use a synthetic tree with more than 1,800 files and cover the
+rename modes, manual-name conflicts, and mixed-batch undo.
 
 ## Legacy CLI
 
-`Illegal_character_remover.py` remains as a legacy command-line wrapper over
-the Python backend. It supports selected files and a non-recursive `--folder`
-run, plus its original interactive entry point:
+`Illegal_character_remover.py` remains available as a legacy command-line
+wrapper. It supports explicit file paths, a non-recursive `--folder` run, and
+the original interactive entry point:
 
 ```powershell
 python Illegal_character_remover.py --folder "D:\data\files"
