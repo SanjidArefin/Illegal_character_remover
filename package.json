@@ -1,0 +1,21 @@
+{
+  "name": "illegal-character-remover",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host 127.0.0.1",
+    "build": "vite build",
+    "preview": "vite preview",
+    "test:frontend": "node --test tests/manual-validation.test.js",
+    "tauri": "tauri"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2",
+    "vite": "^6.4.4"
+  },
+  "dependencies": {
+    "@tauri-apps/plugin-dialog": "^2.8.1",
+    "@tauri-apps/plugin-shell": "^2.4.1"
+  }
+}

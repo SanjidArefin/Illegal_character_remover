@@ -1,0 +1,12 @@
+context.md
+plan.md
+__pycache__/
+*.pyc
+node_modules/
+dist/
+src-tauri/target/
+backend/dist/
+backend/build/
+*.spec
+src-tauri/binaries/*.exe
+src-tauri/gen/**/*

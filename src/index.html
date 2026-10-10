@@ -1,0 +1,168 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#0a0a0a" />
+    <link rel="stylesheet" href="/styles.css" />
+    <title>File Renamer</title>
+    <script type="module" src="/main.js"></script>
+  </head>
+  <body>
+    <header class="topbar">
+      <a class="brand" href="#" aria-label="File Renamer home">
+        <svg class="brand-icon" viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M2.5 6.5A1.5 1.5 0 0 1 4 5h5l2 2h9A1.5 1.5 0 0 1 21.5 8.5v10A1.5 1.5 0 0 1 20 20H4a1.5 1.5 0 0 1-1.5-1.5z" />
+          <path class="folder-flap" d="M2.8 9h18.4l-1.5 9.5H4.3z" />
+        </svg>
+        <span>File Renamer</span>
+      </a>
+      <div class="theme-control">
+        <span>Theme</span>
+        <div class="theme-buttons" role="group" aria-label="Choose color theme">
+          <button class="theme-button" type="button" data-theme-choice="light" aria-label="Light theme" title="Light" aria-pressed="false">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3.5" /><path d="M12 2.5v2M12 19.5v2M4.4 4.4l1.4 1.4m12.4 12.4 1.4 1.4M2.5 12h2m15 0h2M4.4 19.6l1.4-1.4M18.2 5.8l1.4-1.4" /></svg>
+          </button>
+          <button class="theme-button" type="button" data-theme-choice="dark" aria-label="Dark theme" title="Dark" aria-pressed="false">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19.7 15.3A8.5 8.5 0 0 1 8.7 4.3 8.5 8.5 0 1 0 19.7 15.3Z" /></svg>
+          </button>
+          <button class="theme-button" type="button" data-theme-choice="system" aria-label="System theme" title="System" aria-pressed="true">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="4" width="17" height="12.5" /><path d="M12 16.5v3.5M8 20h8" /></svg>
+          </button>
+        </div>
+      </div>
+    </header>
+
+    <main class="app-shell">
+      <section class="panel setup-panel" aria-labelledby="setup-title">
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">01 / SET UP</p>
+            <h2 id="setup-title">Choose what to clean</h2>
+          </div>
+        </div>
+
+        <div class="picker-row">
+          <div class="selection-display">
+            <div class="picker-copy">
+              <strong id="selection-title">Nothing selected</strong>
+              <span id="selection-path">Select a folder to begin.</span>
+            </div>
+            <button id="clear-selection" class="clear-button" type="button" aria-label="Clear selection" title="Clear selection" hidden>
+              <span aria-hidden="true">×</span><span>Clear</span>
+            </button>
+          </div>
+          <button id="select-folder" class="button button-secondary" type="button">Select folder</button>
+        </div>
+
+        <div class="form-grid">
+          <label class="field" for="target-select">
+            <span>Target</span>
+            <select id="target-select">
+              <option value="files">Files</option>
+              <option value="folders">Folders</option>
+              <option value="files_and_folders">Files + Folders</option>
+            </select>
+            <small id="mode-help">The selected folder itself is never renamed.</small>
+          </label>
+          <div class="scope-control">
+            <span>Scope</span>
+            <label class="scope-toggle" for="scope-checkbox">
+              <input id="scope-checkbox" type="checkbox" />
+              <span>Include subfolders</span>
+            </label>
+            <small id="scope-hint" aria-live="polite"></small>
+          </div>
+          <div class="start-wrap">
+            <button id="start-button" class="button button-primary" type="button" disabled>
+              <span aria-hidden="true">↗</span> Scan and rename
+            </button>
+          </div>
+        </div>
+        <div id="app-message" class="inline-message" role="status" hidden></div>
+        <button id="restart-sidecar" class="text-button" type="button" hidden>Restart</button>
+      </section>
+
+      <section id="results-panel" class="panel results-panel" aria-labelledby="results-title" hidden>
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">02 / RESULTS</p>
+            <h2 id="results-title">Rename session</h2>
+          </div>
+          <div class="result-actions">
+            <button id="review-recovered" class="button button-secondary" type="button" hidden>Review recovered undo</button>
+            <button id="review-manual" class="button button-secondary" type="button" hidden>Review manual names</button>
+            <button id="undo-button" class="button button-danger" type="button" disabled>Undo</button>
+          </div>
+        </div>
+        <p id="undo-result" class="inline-message" role="status" hidden></p>
+
+        <div class="result-stats">
+          <div class="stat-card">
+            <span id="renamed-count" class="stat-number">0</span>
+            <span class="stat-label">items renamed</span>
+          </div>
+          <div class="stat-card">
+            <span id="manual-count" class="stat-number">0</span>
+            <span class="stat-label">need a manual name</span>
+          </div>
+          <div class="stat-card">
+            <span id="error-count" class="stat-number">0</span>
+            <span class="stat-label">errors collected</span>
+          </div>
+        </div>
+
+        <div class="result-columns">
+          <section class="result-list" aria-labelledby="renamed-title">
+            <h3 id="renamed-title">Renamed</h3>
+            <ul id="renamed-list" class="item-list"></ul>
+            <p id="renamed-empty" class="empty-copy">No names have changed yet.</p>
+          </section>
+          <section class="result-list" aria-labelledby="manual-title">
+            <h3 id="manual-title">Manual attention</h3>
+            <ul id="manual-list" class="item-list"></ul>
+            <p id="manual-empty" class="empty-copy">Nothing needs a manual name.</p>
+          </section>
+        </div>
+
+        <section class="result-list error-section" aria-labelledby="errors-title">
+          <h3 id="errors-title">Errors</h3>
+          <ul id="error-list" class="item-list"></ul>
+          <p id="errors-empty" class="empty-copy">No errors.</p>
+        </section>
+      </section>
+
+    </main>
+
+    <dialog id="recovered-dialog" class="manual-dialog" aria-labelledby="recovered-dialog-title">
+      <div class="manual-dialog-content">
+        <p class="eyebrow">PREVIOUS SESSION</p>
+        <h2 id="recovered-dialog-title">Recovered undo history</h2>
+        <p id="recovered-dialog-message" role="status"></p>
+        <div class="dialog-actions">
+          <button id="recovered-dismiss" class="button button-secondary" type="button">Dismiss</button>
+          <button id="recovered-confirm" class="button button-danger" type="button">Confirm</button>
+        </div>
+      </div>
+    </dialog>
+
+    <dialog id="manual-dialog" class="manual-dialog" aria-labelledby="manual-dialog-title">
+      <form id="manual-form" method="dialog">
+        <p class="eyebrow">MANUAL NAME</p>
+        <h2 id="manual-dialog-title">Give this item a name</h2>
+        <p id="manual-progress" class="dialog-progress"></p>
+        <p id="manual-item-path" class="dialog-path"></p>
+        <label class="field" for="manual-name">
+          <span>New name <span id="manual-extension" class="extension-hint"></span></span>
+          <input id="manual-name" name="manual-name" autocomplete="off" maxlength="180" required />
+          <small>Use letters, numbers, and spaces. The file extension stays unchanged.</small>
+        </label>
+        <p id="manual-error" class="field-error" role="alert" hidden></p>
+        <div class="dialog-actions">
+          <button id="manual-later" class="button button-secondary" type="button">Do this later</button>
+          <button class="button button-primary" type="submit">Save name</button>
+        </div>
+      </form>
+    </dialog>
+  </body>
+</html>
