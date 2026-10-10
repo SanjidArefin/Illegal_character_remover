@@ -179,12 +179,50 @@ class RenameLogicTests(unittest.TestCase):
 
             output = StringIO()
             run(StringIO(stdin), output, session=RenameSession())
-            responses = [json.loads(line) for line in output.getvalue().splitlines()]
+            responses = [
+                message
+                for message in (json.loads(line) for line in output.getvalue().splitlines())
+                if message.get("type") != "progress"
+            ]
 
             self.assertEqual(len(responses[0]["items"]), 1)
             self.assertEqual(len(responses[1]["renamed"]), 1)
             self.assertTrue((root / "selected.txt").exists())
             self.assertTrue(sibling.exists())
+
+    def test_json_protocol_streams_scan_and_rename_progress(self):
+        with tempfile.TemporaryDirectory(prefix="icr-progress-", dir=PROJECT_ROOT) as temp:
+            root = Path(temp)
+            for index in range(130):
+                (root / f"draft ({index}).txt").write_text("data", encoding="utf-8")
+            requests = [
+                {"action": "scan", "path": str(root), "mode": MODE_FILES_NON_RECURSIVE},
+                {"action": "rename", "path": str(root), "mode": MODE_FILES_NON_RECURSIVE},
+            ]
+            output = StringIO()
+            run(
+                StringIO("\n".join(json.dumps(request) for request in requests) + "\n"),
+                output,
+                session=RenameSession(),
+            )
+
+            messages = [json.loads(line) for line in output.getvalue().splitlines()]
+            progress = [message for message in messages if message.get("type") == "progress"]
+            responses = [message for message in messages if message.get("type") != "progress"]
+            scan_progress = [message for message in progress if message["phase"] == "scan"]
+            rename_progress = [message for message in progress if message["phase"] == "rename"]
+
+            self.assertEqual(len(responses), 2)
+            self.assertEqual(len(responses[0]["items"]), 130)
+            self.assertEqual(len(responses[1]["renamed"]), 130)
+            self.assertTrue(
+                any(message["entries_checked"] == 64 and not message.get("complete")
+                    for message in scan_progress)
+            )
+            self.assertTrue(any(message.get("complete") for message in scan_progress))
+            self.assertEqual(rename_progress[-1]["current"], 130)
+            self.assertEqual(rename_progress[-1]["total"], 130)
+            self.assertTrue(rename_progress[-1]["complete"])
 
     def test_json_protocol_escapes_unicode_for_ansi_stdout(self):
         with tempfile.TemporaryDirectory(prefix="icr-unicode-", dir=PROJECT_ROOT) as temp:
@@ -201,12 +239,15 @@ class RenameLogicTests(unittest.TestCase):
             run(StringIO(request + "\n"), output, session=RenameSession())
 
             serialized = output_bytes.getvalue().decode("cp1252")
-            response = json.loads(serialized)
+            messages = [json.loads(line) for line in serialized.splitlines()]
+            response = next(message for message in messages if message.get("type") != "progress")
+            progress = [message for message in messages if message.get("type") == "progress"]
             self.assertFalse(response["errors"])
             self.assertEqual(
                 {item["path"] for item in response["items"]},
                 {str(root / "作品 !!!"), str(nested)},
             )
+            self.assertTrue(any(message["phase"] == "scan" for message in progress))
             self.assertIn(r"\u4f5c", serialized)
 
 

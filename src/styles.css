@@ -344,6 +344,31 @@ input, select {
 .start-wrap { display: grid; grid-template-rows: 18px 44px minmax(16px, auto); gap: 6px; }
 .start-wrap .button { grid-row: 2; width: 100%; min-width: 0; height: 44px; min-height: 44px; }
 
+.operation-progress {
+  margin-top: 16px;
+  padding: 10px;
+  border: 1px solid var(--line);
+  background: var(--surface);
+}
+
+.operation-progress[hidden] { display: none; }
+.progress-meta { display: flex; align-items: center; justify-content: space-between; gap: 12px; font-size: 12px; }
+.progress-meta strong { font-weight: 700; }
+.progress-meta span { color: var(--muted); text-align: right; }
+.progress-track { height: 14px; margin-top: 8px; overflow: hidden; border: 1px solid var(--line); background: var(--surface-soft); }
+.progress-fill { display: block; width: 0; height: 100%; background: var(--ink); transition: width 120ms linear; }
+.progress-track.is-indeterminate .progress-fill { animation: progress-sweep 1.1s ease-in-out infinite; }
+
+@keyframes progress-sweep {
+  from { transform: translateX(-120%); }
+  to { transform: translateX(320%); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .progress-track.is-indeterminate .progress-fill { animation: none; transform: translateX(0); }
+  .progress-fill { transition: none; }
+}
+
 .inline-message {
   border: 1px solid var(--line);
   color: var(--ink);

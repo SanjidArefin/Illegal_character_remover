@@ -11,7 +11,7 @@ import os
 from datetime import datetime, timezone
 from pathlib import Path
 import tempfile
-from typing import Any, Iterable
+from typing import Any, Callable, Iterable
 import uuid
 
 
@@ -164,7 +164,12 @@ class RenameSession:
         self.undo_log_path = Path(undo_log_path) if undo_log_path is not None else None
         self.session_id = str(uuid.uuid4())
         self.startup_errors: list[dict[str, str]] = []
+        self.progress_callback: Callable[[dict[str, Any]], None] | None = None
         self._load_undo_log()
+
+    def _emit_progress(self, progress: dict[str, Any]) -> None:
+        if self.progress_callback is not None:
+            self.progress_callback(progress)
 
     def _load_undo_log(self) -> None:
         if self.undo_log_path is None:
@@ -350,9 +355,10 @@ class RenameSession:
         response.update(extra)
         return response
 
-    @staticmethod
     def _scan(
-        root_path: str, mode: str
+        self,
+        root_path: str,
+        mode: str,
     ) -> tuple[list[dict[str, Any]], list[dict[str, str]]]:
         if mode not in MODES:
             return [], [_error(root_path, f"Unknown mode: {mode!r}.")]
@@ -378,12 +384,23 @@ class RenameSession:
         items: list[dict[str, Any]] = []
         errors: list[dict[str, str]] = []
         directories: list[tuple[str, int]] = [(root_path, 0)]
+        entries_checked = 0
+        self._emit_progress(
+            {
+                "phase": "scan",
+                "current": 0,
+                "total": None,
+                "entries_checked": 0,
+                "items_found": 0,
+            }
+        )
 
         while directories:
             directory_path, parent_depth = directories.pop()
             try:
                 with os.scandir(directory_path) as entries:
                     for entry in entries:
+                        entries_checked += 1
                         entry_path = os.path.abspath(entry.path)
                         depth = parent_depth + 1
                         try:
@@ -403,12 +420,32 @@ class RenameSession:
                                 )
                         except OSError as exc:
                             errors.append(_error(entry_path, str(exc)))
+                        if entries_checked % 64 == 0:
+                            self._emit_progress(
+                                {
+                                    "phase": "scan",
+                                    "current": entries_checked,
+                                    "total": None,
+                                    "entries_checked": entries_checked,
+                                    "items_found": len(items),
+                                }
+                            )
             except OSError as exc:
                 errors.append(_error(directory_path, str(exc)))
 
         # A deeper entry always precedes its ancestors; path order stabilizes
         # processing among entries at the same depth.
         items.sort(key=lambda item: (-item["depth"], item["path"].casefold()))
+        self._emit_progress(
+            {
+                "phase": "scan",
+                "current": len(items),
+                "total": len(items),
+                "entries_checked": entries_checked,
+                "items_found": len(items),
+                "complete": True,
+            }
+        )
         return items, errors
 
     @staticmethod
@@ -538,33 +575,49 @@ class RenameSession:
                 self._add_pending_manual(_manual_record(item["path"], item["kind"]))
 
         renamed: list[dict[str, str]] = []
-        for item in described:
-            if item["needs_manual"]:
-                continue
-
-            old_path = item["path"]
-            if not os.path.lexists(old_path):
-                errors.append(_error(old_path, "Item disappeared before it could be renamed."))
-                continue
-
-            new_path = self._unique_target_path(old_path, item["kind"], item["cleaned_name"])
-            if _same_path(old_path, new_path):
-                continue
-
+        total = len(described)
+        self._emit_progress(
+            {"phase": "rename", "current": 0, "total": total, "complete": total == 0}
+        )
+        progress_interval = max(1, (total + 99) // 100)
+        for index, item in enumerate(described, start=1):
             try:
-                os.rename(old_path, new_path)
-            except OSError as exc:
-                errors.append(_error(old_path, str(exc)))
-                continue
+                if item["needs_manual"]:
+                    continue
 
-            persistence_error = self._persist_undo_entry(old_path, new_path)
-            if persistence_error is not None:
-                errors.append(persistence_error)
-            renamed.append(
-                {"old_path": old_path, "new_path": new_path, "kind": item["kind"]}
-            )
-            if item["kind"] == "folder":
-                self._relocate_state(old_path, new_path)
+                old_path = item["path"]
+                if not os.path.lexists(old_path):
+                    errors.append(_error(old_path, "Item disappeared before it could be renamed."))
+                    continue
+
+                new_path = self._unique_target_path(old_path, item["kind"], item["cleaned_name"])
+                if _same_path(old_path, new_path):
+                    continue
+
+                try:
+                    os.rename(old_path, new_path)
+                except OSError as exc:
+                    errors.append(_error(old_path, str(exc)))
+                    continue
+
+                persistence_error = self._persist_undo_entry(old_path, new_path)
+                if persistence_error is not None:
+                    errors.append(persistence_error)
+                renamed.append(
+                    {"old_path": old_path, "new_path": new_path, "kind": item["kind"]}
+                )
+                if item["kind"] == "folder":
+                    self._relocate_state(old_path, new_path)
+            finally:
+                if index % progress_interval == 0 or index == total:
+                    self._emit_progress(
+                        {
+                            "phase": "rename",
+                            "current": index,
+                            "total": total,
+                            "complete": index == total,
+                        }
+                    )
 
         response = self._response(errors=errors, renamed=renamed)
         if errors and not (renamed or self.pending_manual):

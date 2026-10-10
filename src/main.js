@@ -20,6 +20,7 @@ const state = {
   selection: null,
   sidecarCommand: null,
   sidecarChild: null,
+  stdoutBuffer: "",
   waitingResponses: [],
   renamed: [],
   recoveredRenames: [],
@@ -77,7 +78,65 @@ function resolvePendingWithError(message) {
   }
 }
 
-function parseSidecarResponse(line) {
+function updateProgress(event) {
+  if (!elements.operationProgress || elements.operationProgress.hidden) return;
+
+  const track = elements.progressTrack;
+  if (event.phase === "scan") {
+    elements.progressTitle.textContent = "Scanning folder";
+    const checked = Number(event.entries_checked) || 0;
+    const found = Number(event.items_found) || 0;
+    if (event.complete) {
+      const percent = 100;
+      track.classList.remove("is-indeterminate");
+      elements.progressFill.style.width = `${percent}%`;
+      track.setAttribute("aria-valuenow", String(percent));
+      elements.progressLabel.textContent = `Scan complete · ${found} items found · ${checked} entries checked`;
+      track.setAttribute("aria-valuetext", elements.progressLabel.textContent);
+    } else {
+      track.classList.add("is-indeterminate");
+      elements.progressFill.style.width = "32%";
+      track.removeAttribute("aria-valuenow");
+      elements.progressLabel.textContent = `Scanning · ${checked} entries checked · ${found} items found`;
+      track.setAttribute("aria-valuetext", elements.progressLabel.textContent);
+    }
+    return;
+  }
+
+  if (event.phase === "rename") {
+    elements.progressTitle.textContent = "Renaming items";
+    track.classList.remove("is-indeterminate");
+    const total = Math.max(0, Number(event.total) || 0);
+    const current = Math.min(total, Math.max(0, Number(event.current) || 0));
+    const percent = total > 0 ? Math.floor((current / total) * 100) : 100;
+    elements.progressFill.style.width = `${percent}%`;
+    track.setAttribute("aria-valuenow", String(percent));
+    elements.progressLabel.textContent = total > 0
+      ? `${current} of ${total} items (${percent}%)`
+      : "No items to rename";
+    track.setAttribute("aria-valuetext", elements.progressLabel.textContent);
+  }
+}
+
+function beginProgress() {
+  elements.operationProgress.hidden = false;
+  elements.progressTitle.textContent = "Scanning folder";
+  elements.progressLabel.textContent = "Starting scan…";
+  elements.progressFill.style.width = "32%";
+  elements.progressTrack.classList.add("is-indeterminate");
+  elements.progressTrack.removeAttribute("aria-valuenow");
+  elements.progressTrack.setAttribute("aria-valuetext", "Starting scan");
+}
+
+function hideProgress() {
+  elements.operationProgress.hidden = true;
+  elements.progressTrack.classList.remove("is-indeterminate");
+  elements.progressFill.style.width = "0";
+  elements.progressTrack.removeAttribute("aria-valuenow");
+  elements.progressTrack.removeAttribute("aria-valuetext");
+}
+
+function handleSidecarLine(line) {
   const trimmed = String(line).trim();
   if (!trimmed) return;
   let response;
@@ -87,15 +146,26 @@ function parseSidecarResponse(line) {
     resolvePendingWithError(`Python returned invalid JSON: ${error.message}`);
     return;
   }
+  if (response?.type === "progress") {
+    updateProgress(response);
+    return;
+  }
   const pending = state.waitingResponses.shift();
   if (!pending) return;
   clearTimeout(pending.timeout);
   pending.resolve(response);
 }
 
+function parseSidecarResponse(chunk) {
+  const lines = `${state.stdoutBuffer}${String(chunk)}`.split(/\r?\n/);
+  state.stdoutBuffer = lines.pop() ?? "";
+  for (const line of lines) handleSidecarLine(line);
+}
+
 function handleSidecarFailure(message, exitCode = null) {
   state.sidecarChild = null;
   state.sidecarCommand = null;
+  state.stdoutBuffer = "";
   resolvePendingWithError(message);
   const suffix = exitCode === null ? "" : ` (exit code ${exitCode})`;
   setStatus(`Python sidecar stopped${suffix}`, "error");
@@ -330,6 +400,7 @@ async function startRename() {
   elements.undoResult.textContent = "";
   try {
     setBusy(true);
+    beginProgress();
     state.errors = [];
     state.manualNeeded = [];
     state.scannedItems = [];
@@ -370,6 +441,7 @@ async function startRename() {
   } catch (error) {
     showMessage(error.message);
   } finally {
+    hideProgress();
     setBusy(false);
     renderResults();
   }
@@ -538,6 +610,7 @@ function cacheElements() {
   const ids = [
     "connection-status", "selection-title", "selection-path", "clear-selection", "select-folder",
     "target-select", "scope-checkbox", "scope-hint", "mode-help", "start-button",
+    "operation-progress", "progress-title", "progress-label", "progress-track", "progress-fill",
     "app-message", "restart-sidecar",
     "results-panel", "review-manual", "review-recovered", "undo-button", "undo-result", "renamed-count", "manual-count", "error-count",
     "renamed-list", "manual-list", "error-list", "renamed-empty", "manual-empty", "errors-empty",

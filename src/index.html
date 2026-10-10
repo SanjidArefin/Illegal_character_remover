@@ -79,6 +79,15 @@
             </button>
           </div>
         </div>
+        <div id="operation-progress" class="operation-progress" role="status" aria-live="polite" hidden>
+          <div class="progress-meta">
+            <strong id="progress-title">Scanning folder</strong>
+            <span id="progress-label"></span>
+          </div>
+          <div id="progress-track" class="progress-track" role="progressbar" aria-label="Operation progress" aria-valuemin="0" aria-valuemax="100">
+            <span id="progress-fill" class="progress-fill"></span>
+          </div>
+        </div>
         <div id="app-message" class="inline-message" role="status" hidden></div>
         <button id="restart-sidecar" class="text-button" type="button" hidden>Restart</button>
       </section>

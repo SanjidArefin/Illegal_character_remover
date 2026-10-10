@@ -1,7 +1,8 @@
 """JSON-lines entry point for the Python sidecar.
 
-Each non-empty stdin line is one JSON request. Each request produces exactly
-one JSON response line on stdout; diagnostics are returned in the response.
+Each non-empty stdin line is one JSON request. Each request produces one final
+JSON response line on stdout; ``scan`` and ``rename`` also stream JSON progress
+event lines (``{"type":"progress", ...}``) before that response.
 
 Request examples::
 
@@ -65,6 +66,18 @@ def run(
     """Read and answer JSON requests until stdin reaches EOF."""
     if session is None:
         session = RenameSession(default_undo_log_path())
+
+    def write_progress(progress: dict[str, Any]) -> None:
+        stdout.write(
+            json.dumps(
+                {"type": "progress", **progress},
+                ensure_ascii=True,
+                separators=(",", ":"),
+            )
+        )
+        stdout.write("\n")
+        stdout.flush()
+
     for line_number, line in enumerate(stdin, start=1):
         if not line.strip():
             continue
@@ -76,12 +89,16 @@ def run(
                 f"Invalid JSON on input line {line_number}: {exc.msg} at column {exc.colno}.",
             )
         else:
+            previous_progress_callback = session.progress_callback
+            session.progress_callback = write_progress
             try:
                 response = session.handle_request(request)
             except Exception as exc:  # Keep the sidecar alive for later requests.
                 response = _protocol_error(
                     session, f"Internal request error: {type(exc).__name__}: {exc}"
                 )
+            finally:
+                session.progress_callback = previous_progress_callback
 
         # Keep the wire format ASCII-safe even when a caller supplies a legacy
         # Windows code-page stream. JSON.parse restores escaped Unicode paths.
