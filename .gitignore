@@ -10,3 +10,4 @@ backend/build/
 *.spec
 src-tauri/binaries/*.exe
 src-tauri/gen/**/*
+pnpm-workspace.yaml
